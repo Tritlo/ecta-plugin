@@ -1,0 +1,11 @@
+.idea/
+.stack-work/
+*~
+dist-newstyle/
+
+*.pkl
+*.csv
+
+log
+*.log
+*.pdf

@@ -21,7 +21,7 @@ library
                  text,
                  containers,
                  language-dot,
-                 ecta
+                 ecta >= 1.0 && < 1.1
   exposed-modules:
     ECTA.Plugin,
     ECTA.Plugin.Utils

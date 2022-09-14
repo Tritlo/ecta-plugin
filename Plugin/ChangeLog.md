@@ -1,8 +1,9 @@
 # Changelog for ecta-plugin
 
-## 0.1.0.2
+## 0.1.1.1
 
-- Add de-duplication of fits.
+- Show fits from GHC valid hole-fits as well
+- De-duplicate fits, prefer GHC fits
 
 ## 0.1.0.1
 

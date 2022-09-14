@@ -1,4 +1,6 @@
-{-# OPTIONS_GHC -fplugin ECTA.Plugin -fno-max-valid-hole-fits #-}
+{-# OPTIONS_GHC -fplugin ECTA.Plugin 
+                -fno-max-valid-hole-fits
+                -fplugin-opt=ECTA.Plugin:expr-size=3 #-}
 module Test (main) where
 
 import TestConstraint

@@ -37,6 +37,7 @@ import Application.TermSearch.Utils
 import Data.Containers.ListUtils (nubOrd)
 import Debug.Trace
 import Data.Either (partitionEithers)
+import Text.Read (readMaybe)
 
 
 plugin :: Plugin
@@ -97,8 +98,21 @@ spToUnderscore = pack . sp . unpack
         sp (s:str) = s:sp str
         sp [] = []
 
+
+defaultSize :: Int
+defaultSize = 5
+
+-- | Parses the options and returns the max expression size to use.
+-- limited to 5 by default.
+getExprSize :: [CommandLineOption] -> Int
+getExprSize (o:opts) | ("expr-size",'=':n) <- span (/= '=') o,
+                       Just x <- readMaybe n = x
+getExprSize _ = defaultSize
+  
+
 ectaPlugin :: [CommandLineOption] -> TypedHole -> [HoleFitCandidate] -> TcM [HoleFit]
 ectaPlugin opts TyH{..} scope  | Just hole <- tyHCt,
+                                 expr_size <- getExprSize opts,
                                  ty <- ctPred hole = do
       (fun_comps, scons) <- fmap (nubBy eqType . concat) . unzip <$> candsToComps scope
       let (local_comps, global_comps) = partitionEithers $ map to_e fun_comps
@@ -139,7 +153,7 @@ ectaPlugin opts TyH{..} scope  | Just hole <- tyHCt,
              let even_more_terms =
                   map (pp . prettyTerm) $
                     concatMap (getAllTerms . refold . reduceFully . flip filterType resNode )
-                              (rtkUpToKAtLeast1 argNodes scope_comps anyArg True 7)
+                              (rtkUpToKAtLeast1 argNodes scope_comps anyArg True expr_size)
              return $ map (RawHoleFit . text . unpack) $ ppterms  ++ even_more_terms
          _ ->  do liftIO $ putStrLn $  "Could not skeleton `" ++ showSDocUnsafe (ppr ty) ++"`"
                   return []

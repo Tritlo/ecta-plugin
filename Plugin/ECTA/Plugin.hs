@@ -31,7 +31,6 @@ import qualified Data.Bifunctor as Bi
 import TcRnDriver (tcRnGetInfo)
 import GHC (ClsInst)
 import InstEnv (ClsInst(ClsInst, is_tvs, is_cls_nm, is_tys), is_dfun)
-import Language.Dot.Pretty (renderDot)
 import ConLike (ConLike(RealDataCon))
 import Data.ECTA.Paths (Path, mkEqConstraints)
 import Application.TermSearch.Utils

@@ -208,17 +208,18 @@ removeDicts t = cleanup $ maybe t id $ rd t
        cleanup (Term (Symbol "app") [arg]) = cleanup arg
        cleanup (Term (Symbol t) args) = Term (Symbol t) $ map cleanup args
 
-
+parIfReq :: Text -> Text
+parIfReq t | (s:_) <- unpack t,
+            s /= '(',
+            not (isAlpha s) = "(" <> t <> ")"
+            | otherwise = t
 
 pp :: Term -> Text
-pp = parIfReq . mconcat . pp' False . removeDicts
- where
-  parIfReq :: Text -> Text
-  parIfReq t | (s:_) <- unpack t,
-              s /= '(',
-              not (isAlpha s) = "(" <> t <> ")"
-             | otherwise = t
+pp = parIfReq . ppNoPar
 
+ppNoPar :: Term -> Text
+ppNoPar = mconcat . pp' False . removeDicts
+ where
   pp' :: Bool -> Term -> [Text]
   pp' _ (Term (Symbol t) [])  = [t]
   pp' par (Term (Symbol "app") (arg:rest)) | res@(_:_) <- concatMap (pp' True) rest =

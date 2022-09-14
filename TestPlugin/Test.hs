@@ -1,9 +1,8 @@
-{-# OPTIONS_GHC -fplugin ECTA.Plugin 
+{-# OPTIONS_GHC -fplugin ECTA.Plugin
                 -fno-max-valid-hole-fits
-                -fplugin-opt=ECTA.Plugin:expr-size=3 #-}
+                -fplugin-opt=ECTA.Plugin:expr-size=5 #-}
 module Test (main) where
 
-import TestConstraint
 import Prelude (Bool(..), putStrLn, undefined, Eq((==)), Int, reverse, Maybe(..))
 import Data.Maybe (mapMaybe)
 

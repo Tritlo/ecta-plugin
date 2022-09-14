@@ -38,6 +38,9 @@ import Data.Containers.ListUtils (nubOrd)
 import Debug.Trace
 import Data.Either (partitionEithers)
 import Text.Read (readMaybe)
+import qualified Data.Set as Set
+
+
 
 
 plugin :: Plugin
@@ -49,8 +52,8 @@ plugin =
             hfPluginInit = newTcRef [],
             hfPluginRun = \ref ->
                   ( HoleFitPlugin
-                   { candPlugin = \_ c -> writeTcRef ref c >> return [],
-                     fitPlugin = \h _ -> readTcRef ref >>= ectaPlugin opts h
+                   { candPlugin = \_ c -> writeTcRef ref c >> return c,
+                     fitPlugin = \h fts -> readTcRef ref >>= ectaPlugin opts h fts
                                   }
                               ),
             hfPluginStop = const (return ())
@@ -108,12 +111,19 @@ getExprSize :: [CommandLineOption] -> Int
 getExprSize (o:opts) | ("expr-size",'=':n) <- span (/= '=') o,
                        Just x <- readMaybe n = x
 getExprSize _ = defaultSize
-  
+ 
 
-ectaPlugin :: [CommandLineOption] -> TypedHole -> [HoleFitCandidate] -> TcM [HoleFit]
-ectaPlugin opts TyH{..} scope  | Just hole <- tyHCt,
-                                 expr_size <- getExprSize opts,
-                                 ty <- ctPred hole = do
+dedup :: [Text] -> [Text]
+dedup ts = dedup' Set.empty ts
+  where dedup' seen [] = []
+        dedup' seen (t:ts) | Set.member t seen = dedup' seen ts
+        dedup' seen (t:ts) = t:dedup' (Set.insert t seen) ts
+
+ectaPlugin :: [CommandLineOption] -> TypedHole
+           -> [HoleFit] -> [HoleFitCandidate] -> TcM [HoleFit]
+ectaPlugin opts TyH{..} found_fits scope | Just hole <- tyHCt,
+                                           expr_size <- getExprSize opts,
+                                           ty <- ctPred hole = do
       (fun_comps, scons) <- fmap (nubBy eqType . concat) . unzip <$> candsToComps scope
       let (local_comps, global_comps) = partitionEithers $ map to_e fun_comps
           to_e (Left t,ts) = Left (t,ts)
@@ -149,12 +159,24 @@ ectaPlugin opts TyH{..} scope  | Just hole <- tyHCt,
       case typeToSkeleton ty of
          Just (t, cons) | resNode <- typeToFta t -> do
              let res = getAllTerms $ refold $ reduceFully $ filterType scopeNode resNode
-             ppterms <- concatMapM (prettyMatch skels groups . prettyTerm ) res
+             -- We ignore ppterms for now, because they need to be printed differently.
+             -- ppterms <- concatMapM (prettyMatch skels groups . prettyTerm ) res
              let even_more_terms =
-                  map (pp . prettyTerm) $
+                  map (ppNoPar . prettyTerm) $
                     concatMap (getAllTerms . refold . reduceFully . flip filterType resNode )
                               (rtkUpToKAtLeast1 argNodes scope_comps anyArg True expr_size)
-             return $ map (RawHoleFit . text . unpack) $ ppterms  ++ even_more_terms
+                 --text_fits = ppterms  ++ even_more_terms
+                 ecta_fits = dedup even_more_terms
+                 fit_set = Set.fromList $ mapMaybe f found_fits
+                   where f (HoleFit {hfCand=c}) = Just (pack $ occNameString $ occName c)
+                         f _ = Nothing
+                 filtered_fits = map (RawHoleFit . text . unpack . parIfReq) $
+                                 filter (not . flip Set.member fit_set) ecta_fits
+                         
+                 
+
+                 
+             return $ found_fits ++ filtered_fits
          _ ->  do liftIO $ putStrLn $  "Could not skeleton `" ++ showSDocUnsafe (ppr ty) ++"`"
                   return []
 

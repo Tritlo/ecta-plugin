@@ -25,7 +25,7 @@ import Data.List (sortOn, groupBy, nub, nubBy, (\\))
 import Data.Function (on)
 import qualified Data.Monoid as M
 import MonadUtils (concatMapM)
-import TcRnMonad (writeTcRef, newTcRef, readTcRef, mapMaybeM, getTopEnv)
+import TcRnMonad (writeTcRef, newTcRef, readTcRef, mapMaybeM, getTopEnv, tryAllM)
 import TcEnv (tcLookupId, tcLookupIdMaybe, tcLookup)
 import qualified Data.Bifunctor as Bi
 import TcRnDriver (tcRnGetInfo)
@@ -40,6 +40,8 @@ import Data.Either (partitionEithers)
 import Text.Read (readMaybe)
 import qualified Data.Set as Set
 
+import Control.Exception (evaluate, displayException)
+import System.IO (hPutStrLn, stderr)
 
 
 
@@ -124,6 +126,19 @@ ectaPlugin :: [CommandLineOption] -> TypedHole
 ectaPlugin opts TyH{..} found_fits scope | Just hole <- tyHCt,
                                            expr_size <- getExprSize opts,
                                            ty <- ctPred hole = do
+  let hM act = do io_r <- tryAllM $ do inner_r <- act
+                                       -- we have to force the evaluation of
+                                       -- the elements in the list,  otherwise
+                                       -- the error doesn't show up... and then
+                                       -- we can't catch it.
+                                       _ <- liftIO $ mapM evaluate inner_r
+                                       return inner_r
+                  case io_r of
+                    Left e -> do liftIO $ do hPutStrLn stderr $ "Hectare error:"
+                                             hPutStrLn stderr $ (displayException e)
+                                 return found_fits
+                    Right r -> return r
+  hM $ do
       (fun_comps, scons) <- fmap (nubBy eqType . concat) . unzip <$> candsToComps scope
       let (local_comps, global_comps) = partitionEithers $ map to_e fun_comps
           to_e (Left t,ts) = Left (t,ts)
@@ -133,52 +148,49 @@ ectaPlugin opts TyH{..} found_fits scope | Just hole <- tyHCt,
       -- function requires a constraint to hold for one of it's variables,
       -- we have to add a path equality to the ECTA.
       let constraints = filter (tcReturnsConstraintKind . tcTypeKind) scons
-      let givens = concatMap (map idType . ic_given) tyHImplics
-          g2c g = fmap (toDictStr (pack $ showSDocUnsafe $ ppr g),)
-                      $ fmap fst $ typeToSkeleton g
-          given_comps = mapMaybe g2c givens
       hsc_env <- getTopEnv
       instance_comps <- mapMaybe instToTerm . concat <$>
                              mapMaybeM (fmap (fmap (\(_,_,c,_,_) -> c) . snd)
                                        . liftIO  . tcRnGetInfo hsc_env . getName
                                        . tyConAppTyCon) constraints
-      let local_scope_comps = local_comps ++ given_comps
-          global_scope_comps = global_comps ++ instance_comps
-          scope_comps = local_scope_comps ++ global_scope_comps
-      let (scopeNode, anyArg, argNodes, skels, groups) =
-            let argNodes = ngnodes local_scope_comps
-                addSyms st tt = map (Bi.bimap (Symbol . st) (tt . typeToFta))
-                gnodes = addSyms id (generalize global_scope_comps)
-                ngnodes = addSyms id id
-                anyArg = Node $ map (\(s,t) -> Edge s [t]) $ 
-                        (gnodes global_scope_comps) ++ argNodes
-                scopeNode = anyArg
-                skels = Map.fromList $ scope_comps
-                groups = Map.fromList $ map (\(t,_) -> (t,[t])) scope_comps
-            in (scopeNode, anyArg, argNodes, skels, groups)
       case typeToSkeleton ty of
-         Just (t, cons) | resNode <- typeToFta t -> do
-             let res = getAllTerms $ refold $ reduceFully $ filterType scopeNode resNode
-             -- We ignore ppterms for now, because they need to be printed differently.
-             -- ppterms <- concatMapM (prettyMatch skels groups . prettyTerm ) res
-             let even_more_terms =
-                  map (ppNoPar . prettyTerm) $
-                    concatMap (getAllTerms . refold . reduceFully . flip filterType resNode )
-                              (rtkUpToKAtLeast1 argNodes scope_comps anyArg True expr_size)
-                 --text_fits = ppterms  ++ even_more_terms
-                 ecta_fits = dedup even_more_terms
-                 fit_set = Set.fromList $ mapMaybe f found_fits
-                   where f (HoleFit {hfCand=c}) = Just (pack $ occNameString $ occName c)
-                         f _ = Nothing
-                 filtered_fits = map (RawHoleFit . text . unpack . parIfReq) $
-                                 filter (not . flip Set.member fit_set) ecta_fits
-                         
-                 
-
-                 
-             return $ found_fits ++ filtered_fits
-         _ ->  do liftIO $ putStrLn $  "Could not skeleton `" ++ showSDocUnsafe (ppr ty) ++"`"
-                  return []
+            Just (t, cons) | -- isSafe t,
+                             resNode <- typeToFta t -> do
+                let givens = concatMap (map idType . ic_given) tyHImplics
+                    g2c g = fmap (toDictStr (pack $ showSDocUnsafe $ ppr g),)
+                                $ fmap fst $ typeToSkeleton g
+                    given_comps = mapMaybe g2c givens
+                    local_scope_comps = local_comps ++ given_comps
+                    global_scope_comps = global_comps ++ instance_comps
+                    scope_comps = local_scope_comps ++ global_scope_comps
+                    -- let (scopeNode, anyArg, argNodes, skels, groups) =
+                    argNodes = ngnodes local_scope_comps
+                    addSyms st tt = map (Bi.bimap (Symbol . st) (tt . typeToFta))
+                                    -- . filter (\(_,t) -> isSafe t)
+                    gnodes = addSyms id (generalize global_scope_comps)
+                    ngnodes = addSyms id id
+                    anyArg = Node $ map (\(s,t) -> Edge s [t]) $
+                             (gnodes global_scope_comps) ++ argNodes
+                    scopeNode = anyArg
+                    skels = Map.fromList $ scope_comps
+                    groups = Map.fromList $ map (\(t,_) -> (t,[t])) scope_comps
+                -- in (scopeNode, anyArg, argNodes, skels, groups)
+                -- We ignore ppterms for now, because they need to be printed differently.
+                -- let res = getAllTerms $ refold $ reduceFully $ filterType scopeNode resNode
+                -- ppterms <- concatMapM (prettyMatch skels groups . prettyTerm ) res
+                let even_more_terms =
+                     map (ppNoPar . prettyTerm) $
+                       concatMap (getAllTerms . refold . reduceFully . flip filterType resNode )
+                                 (rtkUpToKAtLeast1 argNodes scope_comps anyArg True expr_size)
+                    --text_fits = ppterms  ++ even_more_terms
+                    ecta_fits = dedup even_more_terms
+                    fit_set = Set.fromList $ mapMaybe f found_fits
+                      where f (HoleFit {hfCand=c}) = Just (pack $ occNameString $ occName c)
+                            f _ = Nothing
+                    filtered_fits = map (RawHoleFit . text . unpack . parIfReq) $
+                                    filter (not . flip Set.member fit_set) ecta_fits
+                return $ found_fits ++ filtered_fits
+            _ -> return found_fits
 
 
 -- TODO:

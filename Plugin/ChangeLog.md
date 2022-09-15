@@ -1,5 +1,13 @@
 # Changelog for ecta-plugin
 
+## 0.1.1.3
+
+- Fallback to valid hole-fits only when ECTA errors.
+
+## 0.1.1.2
+
+- Ignore unsupported types.
+
 ## 0.1.1.1
 
 - Show fits from GHC valid hole-fits as well

@@ -10,11 +10,12 @@ import Data.Maybe (mapMaybe)
 equal :: Eq a => [a] -> [a] -> Bool
 equal = _
 
-myMapMaybe :: (a -> Maybe b) -> [a] -> [b]
+
+myMapMaybe :: (g -> Maybe b) -> [a] -> [b]
 myMapMaybe f xs = _
 
-prop_reverse :: [Int] -> Bool
-prop_reverse xs = _
+-- prop_reverse :: [Int] -> Bool
+-- prop_reverse xs = _
 -- prop_reverse xs = xs == reverse (reverse xs)
 
 

@@ -287,19 +287,17 @@ prettyMatch skels groups (Term (Symbol t) _) =
         terms = case groups Map.!? t of
                   Just r -> r
                   _ -> groups Map.! (pack $ tail $ unpack t)
-            
 
-mtypeToFta :: TypeSkeleton -> Node
-mtypeToFta (TVar "a"  ) = var1
-mtypeToFta (TVar "b"  ) = var2
-mtypeToFta (TVar "c"  ) = var3
-mtypeToFta (TVar "d"  ) = var4
-mtypeToFta (TVar "acc") = varAcc
--- TODO: lift this restriction
-mtypeToFta (TVar v) =
-  error
-    $ "Current implementation only supports function signatures with type variables a, b, c, d, and acc, but got "
-    ++ show v
-mtypeToFta (TFun  t1    t2      ) = arrowType (mtypeToFta t1) (mtypeToFta t2)
-mtypeToFta (TCons "Fun" [t1, t2]) = arrowType (mtypeToFta t1) (mtypeToFta t2)
-mtypeToFta (TCons s     ts      ) = mkDatatype s (map mtypeToFta ts)
+-- | isSafe checks if we can use the type. Sadly ecta doesn't support all
+-- types as of yet, so we fall back to the regulur valid hole-fits.
+isSafe :: TypeSkeleton -> Bool
+isSafe (TVar "a"  ) = True
+isSafe (TVar "b"  ) = True
+isSafe (TVar "c"  ) = True
+isSafe (TVar "d"  ) = True
+isSafe (TVar "acc") = True
+-- We would like to remove this restriction, but ecta does not support it yet.
+isSafe (TVar v) = False
+isSafe (TFun  t1    t2      ) = isSafe t1 && isSafe t2
+isSafe (TCons "Fun" [t1, t2]) = isSafe t1 && isSafe t2
+isSafe (TCons s     ts      ) = all isSafe ts

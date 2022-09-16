@@ -11,7 +11,7 @@ equal :: Eq a => [a] -> [a] -> Bool
 equal = _
 
 
-myMapMaybe :: (g -> Maybe b) -> [a] -> [b]
+myMapMaybe :: (g -> Maybe b) -> [g] -> [b]
 myMapMaybe f xs = _
 
 -- prop_reverse :: [Int] -> Bool

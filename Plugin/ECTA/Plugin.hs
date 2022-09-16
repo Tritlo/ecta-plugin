@@ -154,8 +154,7 @@ ectaPlugin opts TyH{..} found_fits scope | Just hole <- tyHCt,
                                        . liftIO  . tcRnGetInfo hsc_env . getName
                                        . tyConAppTyCon) constraints
       case typeToSkeleton ty of
-            Just (t, cons) | -- isSafe t,
-                             resNode <- typeToFta t -> do
+            Just (t, cons) | resNode <- typeToFta t -> do
                 let givens = concatMap (map idType . ic_given) tyHImplics
                     g2c g = fmap (toDictStr (pack $ showSDocUnsafe $ ppr g),)
                                 $ fmap fst $ typeToSkeleton g
@@ -166,7 +165,6 @@ ectaPlugin opts TyH{..} found_fits scope | Just hole <- tyHCt,
                     -- let (scopeNode, anyArg, argNodes, skels, groups) =
                     argNodes = ngnodes local_scope_comps
                     addSyms st tt = map (Bi.bimap (Symbol . st) (tt . typeToFta))
-                                    -- . filter (\(_,t) -> isSafe t)
                     gnodes = addSyms id (generalize global_scope_comps)
                     ngnodes = addSyms id id
                     anyArg = Node $ map (\(s,t) -> Edge s [t]) $

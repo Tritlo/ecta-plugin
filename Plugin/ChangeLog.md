@@ -1,5 +1,9 @@
 # Changelog for ecta-plugin
 
+## 0.1.1.4
+
+- Allow arbitrary type-variable names
+
 ## 0.1.1.3
 
 - Fallback to valid hole-fits only when ECTA errors.

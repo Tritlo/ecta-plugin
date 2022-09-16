@@ -22,12 +22,11 @@ import Data.IORef
 import TcRnMonad (newUnique, getTopEnv, getLocalRdrEnv, getGlobalRdrEnv)
 import TcEnv (tcLookupTyCon)
 import Data.Char (isAlpha, isAscii)
-import Data.ECTA (Node (Node), mkEdge, Edge (Edge), pathsMatching, mapNodes, createMu)
+import Data.ECTA (Node (Node), mkEdge, Edge (Edge), pathsMatching, mapNodes, createMu, crush, onNormalNodes)
 import Data.ECTA.Term
-import Application.TermSearch.Utils (theArrowNode, arrowType, var1, var2, var3, var4, varAcc, mkDatatype)
+import Application.TermSearch.Utils (theArrowNode, arrowType, var1, var2, var3, var4, varAcc, mkDatatype, isVar, genVar)
 import Data.ECTA (union)
 import Data.ECTA.Paths (getPath, mkEqConstraints, path, Path)
-import Debug.Trace (traceShow)
 import qualified Data.Monoid as M
 import Data.List (groupBy, sortOn, permutations)
 import Data.Function (on)
@@ -77,18 +76,10 @@ skeletonToType (TCons con sk) =
            _ -> return Nothing
 
 
-
-
 -- | Extremely crude at the moment!!
 -- Returns the typeSkeleton and any constructors (for instance lookup)
 typeToSkeleton :: Type -> Maybe (TypeSkeleton, [Type])
-typeToSkeleton ty | (vars@(_:_), r) <- splitForAllTys ty,
-                    all valid vars
-                    = typeToSkeleton r
-  where
-      valid :: TyCoVar -> Bool
-      -- for now
-      valid = (`elem` ["a", "b", "c", "d", "acc"]) . showSDocUnsafe . ppr
+typeToSkeleton ty | (vars@(_:_), r) <- splitForAllTys ty = typeToSkeleton r
 typeToSkeleton ty | isTyVarTy ty,
                        Just tt <- tyVarToSkeletonText ty = Just  (TVar tt, [])
 typeToSkeleton ty | Just (arg, ret) <- splitFunTy_maybe ty,
@@ -244,7 +235,7 @@ type Comps = [(Text,TypeSkeleton)]
 mtau :: Comps -> Node
 mtau comps = createMu
   (\n -> union
-    (  (arrowType n n:globalTyVars)
+    (  (arrowType n n:(allTypeVars $ map snd comps))
     ++ map (Node . (: []) . constructorToEdge n) usedConstructors
     )
   )
@@ -253,17 +244,29 @@ mtau comps = createMu
   constructorToEdge n (nm, arity) = Edge (Symbol nm) (replicate arity n)
 
   usedConstructors = allConstructors comps
+  allTypeVars :: [TypeSkeleton] -> [Node]
+  allTypeVars [] = []
+  allTypeVars (TVar v:r) = n':allTypeVars r
+    where n' = genVar v
+  allTypeVars (TFun ts1 ts2:r) =
+    allTypeVars [ts1] ++ allTypeVars [ts2] ++ allTypeVars r
+  allTypeVars (TCons _ tss:r) = allTypeVars tss ++ allTypeVars r
+
 
 globalTyVars :: [Node]
 globalTyVars = [var1, var2, var3, var4, varAcc]
 
 generalize :: Comps -> Node -> Node
 generalize comps n@(Node [_]) = Node
-  [mkEdge s ns' (mkEqConstraints $ map pathsForVar vars)]
+  [mkEdge s ns' (mkEqConstraints $ map pathsForVar $ nodeVars n)]
  where
-  vars                = globalTyVars
-  nWithVarsRemoved    = mapNodes (\x -> if x `elem` vars then mtau comps else x) n
+  nWithVarsRemoved    = mapNodes (\x -> if isVar x then mtau comps else x) n
   (Node [Edge s ns']) = nWithVarsRemoved
+
+  -- Support all variable names.
+  nodeVars :: Node -> [Node]
+  nodeVars root =  crush (onNormalNodes $ \(Node es) ->
+                    filter isVar (map (\e -> Node [e]) es)) root
 
   pathsForVar :: Node -> [Path]
   pathsForVar v = pathsMatching (== v) n
@@ -288,16 +291,3 @@ prettyMatch skels groups (Term (Symbol t) _) =
                   Just r -> r
                   _ -> groups Map.! (pack $ tail $ unpack t)
 
--- | isSafe checks if we can use the type. Sadly ecta doesn't support all
--- types as of yet, so we fall back to the regulur valid hole-fits.
-isSafe :: TypeSkeleton -> Bool
-isSafe (TVar "a"  ) = True
-isSafe (TVar "b"  ) = True
-isSafe (TVar "c"  ) = True
-isSafe (TVar "d"  ) = True
-isSafe (TVar "acc") = True
--- We would like to remove this restriction, but ecta does not support it yet.
-isSafe (TVar v) = False
-isSafe (TFun  t1    t2      ) = isSafe t1 && isSafe t2
-isSafe (TCons "Fun" [t1, t2]) = isSafe t1 && isSafe t2
-isSafe (TCons s     ts      ) = all isSafe ts

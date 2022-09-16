@@ -1,2 +1,7 @@
 packages: Plugin/
           TestPlugin/
+
+source-repository-package
+    type: git
+    location: https://github.com/Tritlo/ecta.git
+    tag: c26f73db300c2a6dc3d05a0847e050654209b23c

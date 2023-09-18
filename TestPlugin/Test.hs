@@ -3,21 +3,14 @@
                 -fplugin-opt=ECTA.Plugin:expr-size=5 #-}
 module Test (main) where
 
-import Prelude (Bool(..), putStrLn, undefined, Eq((==)), Int, reverse, Maybe(..))
-import Data.Maybe (mapMaybe)
+-- We need the three of these, if we remove any it does not happen
+import Prelude (pred, print, Monad(..), IO(..))
 
+-- This can be Bool -> Bool also or possibly more,
+-- but we remove Bool from the imports.
+f :: a -> a
+f = _
 
-equal :: Eq a => [a] -> [a] -> Bool
-equal = _
+main :: IO ()
+main = return ()
 
-
-myMapMaybe :: (g -> Maybe b) -> [a] -> [b]
-myMapMaybe f xs = _
-
--- prop_reverse :: [Int] -> Bool
--- prop_reverse xs = _
--- prop_reverse xs = xs == reverse (reverse xs)
-
-
-
-main = putStrLn "hello, ecta"

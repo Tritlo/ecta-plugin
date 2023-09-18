@@ -113,7 +113,7 @@ getExprSize :: [CommandLineOption] -> Int
 getExprSize (o:opts) | ("expr-size",'=':n) <- span (/= '=') o,
                        Just x <- readMaybe n = x
 getExprSize _ = defaultSize
- 
+
 
 dedup :: [Text] -> [Text]
 dedup ts = dedup' Set.empty ts
@@ -134,8 +134,8 @@ ectaPlugin opts TyH{..} found_fits scope | Just hole <- tyHCt,
                                        _ <- liftIO $ mapM evaluate inner_r
                                        return inner_r
                   case io_r of
-                    Left e -> do liftIO $ do hPutStrLn stderr $ "Hectare error:"
-                                             hPutStrLn stderr $ (displayException e)
+                    Left e -> do liftIO $ do hPutStrLn stderr "Hectare error:"
+                                             hPutStrLn stderr (displayException e)
                                  return found_fits
                     Right r -> return r
   hM $ do
@@ -145,7 +145,7 @@ ectaPlugin opts TyH{..} found_fits scope | Just hole <- tyHCt,
           to_e (Right t, ts) = Right (t,ts)
       -- The constraints are there and added to the graph... but we have to
       -- be more precise when we add them to the machine. Any time a
-      -- function requires a constraint to hold for one of it's variables,
+      -- function requires a constraint to hold for one of its variables,
       -- we have to add a path equality to the ECTA.
       let constraints = filter (tcReturnsConstraintKind . tcTypeKind) scons
       hsc_env <- getTopEnv
@@ -156,6 +156,7 @@ ectaPlugin opts TyH{..} found_fits scope | Just hole <- tyHCt,
       case typeToSkeleton ty of
             Just (t, cons) | -- isSafe t,
                              resNode <- typeToFta t -> do
+                liftIO (print (t, map (showSDocUnsafe . ppr) cons))
                 let givens = concatMap (map idType . ic_given) tyHImplics
                     g2c g = fmap (toDictStr (pack $ showSDocUnsafe $ ppr g),)
                                 $ fmap fst $ typeToSkeleton g
